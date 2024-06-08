@@ -17,6 +17,7 @@ import javafx.scene.image.Image;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
 
 public class rewrite extends Application {
@@ -33,6 +34,70 @@ public class rewrite extends Application {
 
 	public static void main(String[] args) throws IOException, InterruptedException {
 
+		//		// Stripe APIキーをセットアップ
+		//		Stripe.apiKey = "sk_test_51Oqvn1I8TZwnhH04Wm8IHI85NgQM8TZPnyWYEcEyWTEMvi9EZjY49Ik8L7TSV2rsmhRyXu87VcPNbmwwPTD0vjGe00y9GROWtE";
+		//
+		//		try {
+		//			// ユーザーのStripe顧客IDを指定
+		//			String customerId = "cus_PgLnBJMN4slI0F";
+		//
+		//			// 顧客に関連付けられた請求書を取得
+		//			InvoiceCollection invoices = Invoice.list(
+		//					new HashMap<String, Object>() {
+		//						{
+		//							put("customer", customerId);
+		//						}
+		//					});
+		//
+		//			// 請求書の情報を出力
+		//			for (Invoice invoice : invoices.getData()) {
+		//				System.out.println("請求書ID: " + invoice.getId());
+		//				System.out.println("請求書の金額: " + invoice.getAmountDue());
+		//				System.out.println("請求書の状態: " + invoice.getStatus());
+		//				System.out.println("請求書の作成日: " + invoice.getCreated());
+		//			}
+		//		} catch (StripeException e) {
+		//			// Stripe APIのエラーハンドリング
+		//			e.printStackTrace();
+		//		}
+		//
+		//		// 決済ID（StripeのチャージID）を指定
+		//		String chargeId = "ch_3OqwLuI8TZwnhH041VL0mqJn";
+		//
+		//		try {
+		//			// 決済の情報を取得
+		//			Charge charge = Charge.retrieve(chargeId);
+		//
+		//			// 決済のステータスを取得
+		//			String status = charge.getStatus();
+		//
+		//			// 決済が成功しているかどうかを判定acct_1Oqvn1I8TZwnhH04
+		//			if ("succeeded".equals(status)) {
+		//				System.out.println("決済が成功しました");
+		//			} else {
+		//				System.out.println("決済が失敗しました");
+		//			}
+		//		} catch (StripeException e) {
+		//			// Stripe APIのエラーハンドリング
+		//			e.printStackTrace();
+		//		}
+		//
+		//		// 決済情報を作成
+		//		Map<String, Object> params = new HashMap<>();
+		//		params.put("amount", 5000); // 決済金額（例: 2000円）
+		//		params.put("currency", "JPY"); // 通貨コード
+		//		params.put("source", "tok_visa"); // クレジットカードのトークン（テスト用のトークン）
+		//		params.put("description", "テスト用の振込");
+		//
+		//		try {
+		//			// 決済を実行
+		//			Charge charge = Charge.create(params);
+		//			System.out.println("決済が成功しました: " + charge);
+		//		} catch (StripeException e) {
+		//			// 決済が失敗した場合の処理
+		//			e.printStackTrace();
+		//		}
+
 		//プロパティファイル読み込み
 		Path p1 = Paths.get("");
 		Path p2 = p1.toAbsolutePath();
@@ -41,8 +106,8 @@ public class rewrite extends Application {
 
 		int rectangleX = (int) startX;
 		int rectangleY = (int) startY;
-		int rectangleWidth = (int)endX - (int)startX;
-		int rectangleHeight = (int)endY - (int)startY;
+		int rectangleWidth = (int) endX - (int) startX;
+		int rectangleHeight = (int) endY - (int) startY;
 
 		//プロパティファイル読み込み
 		String moviCutpropertiesPath = currentPath + "\\system.properties";
@@ -54,16 +119,16 @@ public class rewrite extends Application {
 			for (int i = 0; i < lines.size(); i++) {
 				String line = lines.get(i);
 				if (line.contains("rectangleX")) {
-					lines.set(i, line.replace(line, "rectangleX" + "=" + rectangleX ));
+					lines.set(i, line.replace(line, "rectangleX" + "=" + rectangleX));
 				}
 				if (line.contains("rectangleY")) {
-					lines.set(i, line.replace(line, "rectangleY" + "=" + rectangleY ));
+					lines.set(i, line.replace(line, "rectangleY" + "=" + rectangleY));
 				}
 				if (line.contains("rectangleWidth")) {
-					lines.set(i, line.replace(line, "rectangleWidth" + "=" + rectangleWidth ));
+					lines.set(i, line.replace(line, "rectangleWidth" + "=" + rectangleWidth));
 				}
 				if (line.contains("rectangleHeight")) {
-					lines.set(i, line.replace(line, "rectangleHeight" + "=" + rectangleHeight ));
+					lines.set(i, line.replace(line, "rectangleHeight" + "=" + rectangleHeight));
 				}
 			}
 
@@ -95,7 +160,7 @@ public class rewrite extends Application {
 		}
 
 		// 画像を読み込む
-		Image image = new Image(videoPath + "\\" + vPath ); // 画像のパスを指定してください
+		Image image = new Image(videoPath + "\\" + vPath);
 		canvas = new Canvas(image.getWidth(), image.getHeight());
 		gc = canvas.getGraphicsContext2D();
 		gc.drawImage(image, 0, 0);
@@ -107,8 +172,13 @@ public class rewrite extends Application {
 		StackPane root = new StackPane();
 		root.getChildren().add(canvas);
 
-		Scene scene = new Scene(root, image.getWidth(), image.getHeight());
+		double screenWidth = Screen.getPrimary().getVisualBounds().getWidth();
+		double screenHeight = Screen.getPrimary().getVisualBounds().getHeight();
+
+		Scene scene = new Scene(root);
 		primaryStage.setScene(scene);
+		primaryStage.setWidth(screenWidth);
+		primaryStage.setHeight(screenHeight);
 		primaryStage.show();
 	}
 
@@ -152,4 +222,3 @@ public class rewrite extends Application {
 	}
 
 }
-
