@@ -4,17 +4,20 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Paths;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+
+import javax.mail.Message;
+import javax.mail.MessagingException;
+import javax.mail.PasswordAuthentication;
+import javax.mail.Transport;
+import javax.mail.internet.InternetAddress;
+import javax.mail.internet.MimeMessage;
 
 import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
@@ -22,10 +25,14 @@ import com.stripe.model.Customer;
 import com.stripe.model.CustomerCollection;
 import com.stripe.model.Subscription;
 import com.stripe.model.SubscriptionCollection;
-import com.stripe.model.SubscriptionItem;
-import com.stripe.param.CustomerCreateParams;
+import com.stripe.model.checkout.Session;
 import com.stripe.param.CustomerListParams;
+import com.stripe.param.CustomerUpdateParams;
 import com.stripe.param.SubscriptionListParams;
+import com.stripe.param.checkout.SessionCreateParams;
+
+import oshi.SystemInfo;
+import oshi.hardware.ComputerSystem;
 
 public class SubscriptionCheck {
 
@@ -39,6 +46,10 @@ public class SubscriptionCheck {
 		// Stripe APIキーをセットアップ
 		Stripe.apiKey = "sk_test_51Oqvn1I8TZwnhH04Wm8IHI85NgQM8TZPnyWYEcEyWTEMvi9EZjY49Ik8L7TSV2rsmhRyXu87VcPNbmwwPTD0vjGe00y9GROWtE";
 
+		String customerId = "";
+		String currentSerialNumber = "";
+		String registerSerialNumber = "";
+
 		//プロパティ読み込み
 		String currentPath = Paths.get("").toAbsolutePath().toString();
 		String path = currentPath + "\\system.properties";
@@ -49,27 +60,152 @@ public class SubscriptionCheck {
 			properties.load(istream);
 			email = properties.getProperty("mailAddress");
 
-			String customerId = "";
-			//顧客リストを取得
+			//シリアル番号を取得
+			SystemInfo si = new SystemInfo();
+			ComputerSystem cs = si.getHardware().getComputerSystem();
+			currentSerialNumber = cs.getSerialNumber();
+
+			//顧客リストを全件取得
 			CustomerListParams params = CustomerListParams.builder()
 					.setLimit((long) 1000) // 必要に応じて制限を設定
 					.build();
 
+			//プロパティのメールアドレスと一致するまで回す
 			CustomerCollection customers = Customer.list(params);
 			List<Customer> customerList = customers.getData();
-
-			//顧客リストからメールアドレスでユーザを特定
 			for (Customer customer : customerList) {
-				System.out.println("Email:" + customer.getEmail() + "  Id:" + customer.getId());
-				if (email.equals(customer.getEmail())) {
+				Map<String, String> metaList = customer.getMetadata();
+				registerSerialNumber = metaList.get("serialNumber");
+
+				//メールアドレスとシリアル番号がstripeに登録してあるデータと一致したら顧客IDを取得
+				if (email.equals(customer.getEmail()) && currentSerialNumber.equals(registerSerialNumber)) {
 					customerId = customer.getId();
 					break;
 				}
+				//メールアドレスは一致するが、シリアル番号が一致しない場合メールを飛ばす
+				else if (email.equals(customer.getEmail()) && !currentSerialNumber.equals(registerSerialNumber)) {
+					System.out.println("異常検知：シリアル番号不一致");
+					// Gmailの認証情報
+					final String username = "southkouta@gmail.com"; // 送信元のGmailアドレス
+					final String password = "jqcv efri zjwx lahz"; // 送信元のGmailパスワード
+
+					// SMTPサーバの設定
+					Properties props = new Properties();
+					props.put("mail.smtp.auth", "true");
+					props.put("mail.smtp.starttls.enable", "true");
+					props.put("mail.smtp.host", "smtp.gmail.com");
+					props.put("mail.smtp.port", "587");
+
+					javax.mail.Session session = javax.mail.Session.getInstance(props, new javax.mail.Authenticator() {
+						@Override
+						protected PasswordAuthentication getPasswordAuthentication() {
+							return new PasswordAuthentication(username, password);
+						}
+					});
+
+					try {
+						// メールメッセージの作成
+						Message message = new MimeMessage(session);
+						message.setFrom(new InternetAddress(username));
+						message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(username));
+						message.setSubject("パチンコツール シリアル番号異常検知");
+						message.setText("メールアドレスが一致していますが、シリアル番号が異なるアクセスがありました。"
+								+ "\n  メールアドレス⇒" + username + "\n  アクセスPCのシリアル番号⇒" + currentSerialNumber + "\n  stripeに登録されているこのユーザのシリアル番号⇒" + registerSerialNumber);
+
+						// メールの送信
+						Transport.send(message);
+
+						System.out.println("Email sent successfully!");
+
+					} catch (MessagingException e) {
+						e.printStackTrace();
+					}
+				}
 			}
 
-			//顧客IDの登録
+			System.out.println("Email=" + email);
+			System.out.println("customerId=" + customerId);
+
+			//サブスク支払い判定
 			boolean isSubscribed = checkSubscriptionStatus(customerId);
 			if (isSubscribed) {
+
+			}
+			//支払いがなければ支払いリンクを表示
+			else {
+
+				// Checkoutセッションのパラメータを設定
+				SessionCreateParams checkOutParam = SessionCreateParams.builder()
+						.addPaymentMethodType(SessionCreateParams.PaymentMethodType.CARD)
+						.setMode(SessionCreateParams.Mode.SUBSCRIPTION)
+						.setSuccessUrl("https://your-domain.com/success?session_id={CHECKOUT_SESSION_ID}")
+						.setCancelUrl("https://your-domain.com/cancel")
+						.addLineItem(
+								SessionCreateParams.LineItem.builder()
+										.setPrice("price_1PWqZDI8TZwnhH04jf9NEK75")
+										.setQuantity(1L)
+										.build())
+						.setCustomerEmail(email)
+						.build();
+
+				// Checkoutセッションの作成
+				Session session = Session.create(checkOutParam);
+				String sessionId = session.getId();
+				String sessionUrl = session.getUrl();
+				//				System.out.println("Checkout Session ID: " + sessionId);
+				//				System.out.println("Checkout Session URL: " + sessionUrl);
+
+				// ブラウザでセッションURLを開く
+				openBrowser(sessionUrl);
+
+				int cnt = 0;
+				while (true) {
+					try {
+						// Checkoutセッションのステータスを取得する
+						session = Session.retrieve(sessionId);
+
+						//一定回数チェックしても終わらない場合は強制終了
+						if (cnt > 10) {
+							break;
+						}
+
+						// ステータスを確認し、支払いが成功しているかどうかを確認
+						if ("complete".equals(session.getStatus())) {
+							System.out.println("支払い成功");
+							break;
+						} else {
+							cnt++;
+							System.out.println("支払いが完了していません。status: " + session.getStatus());
+						}
+
+						// 一定時間待ってから再度確認する
+						Thread.sleep(20000); // 20秒待つ
+					} catch (StripeException | InterruptedException e) {
+						e.printStackTrace();
+					}
+				}
+
+				// Checkoutセッションを取得
+				session = Session.retrieve(sessionId);
+
+				// セッションから顧客IDを取得
+				customerId = session.getCustomer();
+
+				// 顧客IDを使用して顧客情報を取得
+				Customer customer = Customer.retrieve(customerId);
+
+				// 顧客情報を表示
+				System.out.println("Customer ID: " + customer.getId());
+				System.out.println("Customer Email: " + customer.getEmail());
+				System.out.println("Customer Name: " + customer.getName());
+
+				// 顧客更新パラメータを設定
+				CustomerUpdateParams updateParams = CustomerUpdateParams.builder()
+						.putMetadata("serialNumber", currentSerialNumber)
+						.build();
+
+				// 顧客情報を更新
+				customer = customer.update(updateParams);
 
 			}
 		} catch (IOException | StripeException e) {
@@ -77,31 +213,54 @@ public class SubscriptionCheck {
 		}
 	}
 
+	//サブスクの支払いチェック
 	private static boolean checkSubscriptionStatus(String customerId) throws StripeException {
 		SubscriptionListParams params = SubscriptionListParams.builder()
 				.setCustomer(customerId)
 				.build();
 
+		if (customerId.equals("")) {
+			return false;
+		}
+
 		SubscriptionCollection subscriptions = Subscription.list(params);
 		List<Subscription> subscriptionList = subscriptions.getData();
-
 		for (Subscription subscription : subscriptionList) {
 			if ("active".equals(subscription.getStatus())) {
 				System.out.println("サブスクリプションID: " + subscription.getId());
 				System.out.println("サブスクリプションの開始日: " + epochToDateTime(subscription.getCurrentPeriodStart()));
 				System.out.println("サブスクリプションの終了日: " + epochToDateTime(subscription.getCurrentPeriodEnd()));
 
-				for (SubscriptionItem item : subscription.getItems().getData()) {
-					System.out.println("プランID: " + item.getPlan().getId());
-					System.out.println("プラン名: " + item.getPlan().getNickname());
-					System.out.println("プランの金額: " + item.getPlan().getAmount());
-					System.out.println("通貨: " + item.getPlan().getCurrency());
-				}
+				//				for (SubscriptionItem item : subscription.getItems().getData()) {
+				//					System.out.println("プランID: " + item.getPlan().getId());
+				//					System.out.println("プラン名: " + item.getPlan().getNickname());
+				//					System.out.println("プランの金額: " + item.getPlan().getAmount());
+				//					System.out.println("通貨: " + item.getPlan().getCurrency());
+				//				}
 
 				return true; // アクティブなサブスクリプションがある場合
 			}
 		}
 		return false; // アクティブなサブスクリプションがない場合
+	}
+
+	// ブラウザで指定したURLを開くメソッド
+	private static void openBrowser(String url) {
+		try {
+			if (System.getProperty("os.name").toLowerCase().contains("win")) {
+				// Windowsの場合
+				Runtime.getRuntime().exec(new String[] { "rundll32", "url.dll,FileProtocolHandler", url });
+			} else if (System.getProperty("os.name").toLowerCase().contains("mac")) {
+				// macOSの場合
+				Runtime.getRuntime().exec("open " + url);
+			} else if (System.getProperty("os.name").toLowerCase().contains("nix") ||
+					System.getProperty("os.name").toLowerCase().contains("nux")) {
+				// Unix/Linuxの場合
+				Runtime.getRuntime().exec("xdg-open " + url);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 
 	private static String epochToDateTime(Long epochTime) {
@@ -111,98 +270,4 @@ public class SubscriptionCheck {
 		return dateTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
 	}
 
-	public static String registerUser(String email) {
-
-		//顧客IDの存在チェック
-		String customerId = getCustomerId(email);
-		if (customerId != null) {
-			System.out.println("すでに登録されているユーザです。顧客ID: " + customerId);
-			return customerId;
-		}
-
-		try {
-			CustomerCreateParams params = CustomerCreateParams.builder()
-					.setEmail(email)
-					.build();
-
-			Customer customer = Customer.create(params);
-			customerId = customer.getId();
-
-			//顧客IDが存在しないので登録
-			saveCustomerId(email, customerId);
-			return customerId;
-
-		} catch (StripeException e) {
-			e.printStackTrace();
-			return null;
-		}
-	}
-
-	//既に存在する顧客IDかチェック
-	public static String getCustomerId(String email) {
-		Connection con = null;
-		PreparedStatement stmt = null;
-		ResultSet rs = null;
-
-		String sql = "SELECT stripe_customer_id FROM subscription WHERE email = ?";
-		String customerId = null;
-
-		try {
-			con = DriverManager.getConnection(sqlHost, sqlUser, sqlPassword);
-			stmt = con.prepareStatement(sql);
-			stmt.setString(1, email);
-			rs = stmt.executeQuery();
-
-			if (rs.next()) {
-				customerId = rs.getString("stripe_customer_id");
-			}
-
-		} catch (SQLException e) {
-			e.printStackTrace();
-		} finally {
-			try {
-				if (rs != null)
-					rs.close();
-				if (stmt != null)
-					stmt.close();
-				if (con != null)
-					con.close();
-			} catch (SQLException e) {
-				e.printStackTrace();
-			}
-		}
-		return customerId;
-	}
-
-	//顧客IDの新規登録
-	private static void saveCustomerId(String email, String customerId) {
-		Connection con = null;
-		PreparedStatement stmt = null;
-		ResultSet rs = null;
-
-		String sql = "INSERT INTO subscription (email, stripe_customer_id) VALUES (?, ?)";
-
-		try {
-			con = DriverManager.getConnection(sqlHost, sqlUser, sqlPassword);
-			stmt = con.prepareStatement(sql);
-
-			stmt.setString(1, email);
-			stmt.setString(2, customerId);
-			stmt.executeUpdate();
-
-		} catch (SQLException e) {
-			e.printStackTrace();
-		} finally {
-			try {
-				if (rs != null)
-					rs.close();
-				if (stmt != null)
-					stmt.close();
-				if (con != null)
-					con.close();
-			} catch (SQLException e) {
-				e.printStackTrace();
-			}
-		}
-	}
 }
