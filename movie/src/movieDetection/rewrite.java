@@ -26,6 +26,9 @@ public class rewrite extends Application {
 	private static double startY;
 	private static double endX;
 	private static double endY;
+	private static double picWitdh;
+	private static double picHeight;
+
 	private boolean drawing = false;
 	private boolean rectangleDrawn = false;
 	private Canvas canvas;
@@ -97,7 +100,10 @@ public class rewrite extends Application {
 
 		// 画像を読み込む
 		Image image = new Image(videoPath + "\\" + vPath);
-		canvas = new Canvas(image.getWidth(), image.getHeight());
+		picWitdh = image.getWidth();
+		picHeight = image.getHeight();
+
+		canvas = new Canvas(picWitdh, picHeight);
 		gc = canvas.getGraphicsContext2D();
 		gc.drawImage(image, 0, 0);
 
@@ -143,6 +149,14 @@ public class rewrite extends Application {
 		if (drawing && !rectangleDrawn) {
 			endX = event.getX();
 			endY = event.getY();
+
+			if (endX > picWitdh) {
+				endX = picWitdh;
+			}
+			if (endY > picHeight) {
+				endY = picHeight;
+			}
+
 			drawing = false;
 			rectangleDrawn = true;
 			System.out.println("Start: (" + startX + "," + startY + ")");

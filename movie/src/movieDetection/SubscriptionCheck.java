@@ -36,11 +36,6 @@ import oshi.hardware.ComputerSystem;
 
 public class SubscriptionCheck {
 
-	//ローカル用
-	private static String sqlHost = "jdbc:mysql://localhost:3306/sys";
-	private static String sqlUser = "root";
-	private static String sqlPassword = "omega4242";
-
 	public static void main(String[] args) {
 
 		// Stripe APIキーをセットアップ
@@ -88,7 +83,6 @@ public class SubscriptionCheck {
 					// Gmailの認証情報
 					final String username = "southkouta@gmail.com"; // 送信元のGmailアドレス
 					final String password = "jqcv efri zjwx lahz"; // 送信元のGmailパスワード
-
 					// SMTPサーバの設定
 					Properties props = new Properties();
 					props.put("mail.smtp.auth", "true");
