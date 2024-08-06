@@ -1,18 +1,24 @@
 package movieDetection;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.List;
+import java.util.Properties;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
 import javafx.scene.image.Image;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.StackPane;
@@ -28,6 +34,7 @@ public class rewrite extends Application {
 	private static double endY;
 	private static double picWitdh;
 	private static double picHeight;
+	private static String propertiesPath;
 
 	private boolean drawing = false;
 	private boolean rectangleDrawn = false;
@@ -38,9 +45,52 @@ public class rewrite extends Application {
 	public static void main(String[] args) throws IOException, InterruptedException {
 
 		//プロパティファイル読み込み
-		Path p1 = Paths.get("");
-		Path p2 = p1.toAbsolutePath();
-		String currentPath = p2.toString();
+		Path p = Paths.get("").toAbsolutePath();
+		String currentPath = p.toString();
+		propertiesPath = currentPath + "\\system.properties";
+		String email = "";
+		try {
+			InputStream istream = new FileInputStream(propertiesPath);
+			Properties properties = new Properties();
+			properties.load(istream);
+			email = properties.getProperty("mailAddress");
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+		}
+
+		//サブスクの支払い判定
+		Boolean result = false;
+		try {
+			result = SubscriptionCheck.subscriptionCheck(email);
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+		}
+
+		//支払いをしてなければ支払いリンクを生成して表示
+		Boolean payJudge = false;
+		if (!result) {
+			System.out.println("支払いチェック：NG");
+			try {
+				payJudge = SubscriptionCheck.payment(email);
+				if (payJudge) {
+					System.out.println("支払い完了しました。");
+					//					showAlert(AlertType.INFORMATION, "Information", "支払い完了しました。");
+					mainFunction(args);
+				} else {
+					System.out.println("支払い失敗しました。");
+				}
+			} catch (Exception e) {
+				System.out.println(e.getMessage());
+			}
+		}
+		//支払い完了していればそのまま利用できる
+		else {
+			System.out.println("支払いチェック：OK");
+			mainFunction(args);
+		}
+	}
+
+	private static void mainFunction(String[] args) {
 		launch(args);
 
 		int rectangleX = (int) startX;
@@ -49,11 +99,9 @@ public class rewrite extends Application {
 		int rectangleHeight = (int) endY - (int) startY;
 
 		//プロパティファイル読み込み
-		String moviCutpropertiesPath = currentPath + "\\system.properties";
-
 		try {
 			// ファイルを読み込んで行ごとに処理
-			Path path = Path.of(moviCutpropertiesPath);
+			Path path = Path.of(propertiesPath);
 			List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
 			for (int i = 0; i < lines.size(); i++) {
 				String line = lines.get(i);
@@ -150,11 +198,11 @@ public class rewrite extends Application {
 			endX = event.getX();
 			endY = event.getY();
 
-			if (endX > picWitdh) {
-				endX = picWitdh;
+			if (endX > picWitdh - 3) {
+				endX = picWitdh - 3;
 			}
-			if (endY > picHeight) {
-				endY = picHeight;
+			if (endY > picHeight - 3) {
+				endY = picHeight - 3;
 			}
 
 			drawing = false;
@@ -169,6 +217,17 @@ public class rewrite extends Application {
 		double width = Math.abs(endX - startX);
 		double height = Math.abs(endY - startY);
 		gc.strokeRect(startX, startY, width, height);
+	}
+
+	// メッセージボックスを表示するメソッド
+	private static void showAlert(AlertType alertType, String title, String message) {
+		Platform.runLater(() -> {
+			Alert alert = new Alert(alertType);
+			alert.setTitle(title);
+			alert.setHeaderText(null); // ヘッダーを非表示にする場合
+			alert.setContentText(message);
+			alert.showAndWait();
+		});
 	}
 
 }
