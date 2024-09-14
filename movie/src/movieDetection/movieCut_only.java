@@ -15,6 +15,7 @@ import java.util.Properties;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.Rect;
+import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.videoio.VideoCapture;
 import org.opencv.videoio.Videoio;
@@ -46,6 +47,7 @@ public class movieCut_only {
 		int counterFlg = 0;
 		int thresholdProperties = 0;
 		Double removeBlockTime = 0.0;
+		int pixelThreshold = 0;
 		InputStream istream = new FileInputStream(propertiesPass);
 		properties.load(istream);
 		noChangeTime = Integer.valueOf(properties.getProperty("noChangeTime"));
@@ -59,6 +61,8 @@ public class movieCut_only {
 		counterFlg = Integer.valueOf(properties.getProperty("counterOutputFlg"));
 		thresholdProperties = Integer.valueOf(properties.getProperty("threshold"));
 		removeBlockTime = Double.valueOf(properties.getProperty("removeBlockTime"));
+		removeBlockTime = Double.valueOf(properties.getProperty("removeBlockTime"));
+		pixelThreshold = Integer.valueOf(properties.getProperty("pixelThreshold"));
 
 		// パチンコ本体のパスを指定
 		String mainPath = currentPath + "\\input_main";
@@ -90,40 +94,55 @@ public class movieCut_only {
 		List<List<Integer>> frameList = new ArrayList<List<Integer>>();
 		List<List<Integer>> frameResultList = new ArrayList<List<Integer>>();
 
-		int frameSkipCnt = (int) frameRate / 4;
+		int frameSkipCnt = (int) frameRate;
 		Mat frame = new Mat();
 		int frameCnt = 0;
 		int tmpFrame = 0;
-		double threshold = 50;// 閾値
 
 		//-----------------切り取る開始終了フレームの処理 開始-------------------
 		while (frameCnt < totalFrames - 1) {
 			frameCnt++;
 
-			//フレームレートの3で割った数ごとに変化をみる
-			if (frameCnt % frameSkipCnt == 3) {
+			// フレームレートの3で割った数ごとに変化をみる
+			if (frameCnt % frameSkipCnt == 0) {
 				vc.grab();
 				vc.retrieve(frame);
+
+				// フレームをグレースケールに変換
+				Mat grayFrame = new Mat();
+				Imgproc.cvtColor(frame, grayFrame, Imgproc.COLOR_BGR2GRAY);
+
+				// 差分計算前にノイズを低減するための平滑化処理
+				Imgproc.GaussianBlur(grayFrame, grayFrame, new Size(0, 0), 0);
+
 				if (prevGrayFrame != null) {
-
-					// フレーム間の差分を計算
+					// 読み取る領域
 					Rect regionOfInterest = new Rect(rectangleX, rectangleY, rectangleWidth, rectangleHeight);
+					// 前回のフレームで領域指定
 					Mat roiFrame = new Mat(prevGrayFrame, regionOfInterest);
-					if (frame.empty()) {
-						break;
-					}
-					Mat roiCurrentFrame = new Mat(frame, regionOfInterest);
-
+					// 現在のフレームで領域指定
+					Mat roiCurrentFrame = new Mat(grayFrame, regionOfInterest);
+					// 2つのフレームの差分を計算し、diffFrameに格納
 					Mat diffFrame = new Mat();
 					Core.absdiff(roiFrame, roiCurrentFrame, diffFrame);
-					prevGrayFrame.release();
 
-					// 差分を二値化する
-					Mat binaryDiff = new Mat();
-					Imgproc.threshold(diffFrame, binaryDiff, threshold, 1, Imgproc.THRESH_BINARY);
+					int totalDiff = 0;
+					for (int y = 0; y < diffFrame.rows(); y++) {
+						for (int x = 0; x < diffFrame.cols(); x++) {
+							double[] diffPixelValue = diffFrame.get(y, x);
+							System.out.print(diffPixelValue[0] + "	");
+							if (diffPixelValue[0] > pixelThreshold) {
+								totalDiff += diffPixelValue[0];
+								//								System.out.println(diffPixelValue[0]);
+							}
+							//							if (diffPixelValue[0] < 10 && diffPixelValue[0] > 0) {
+							//								System.out.println(diffPixelValue[0]);
+							//							}
+						}
+						System.out.println();
+					}
+					System.out.println(frameCnt / (int) frameRate + "秒   " + totalDiff);
 
-					// 二値化した差分の合計値を計算
-					double totalDiff = Core.sumElems(binaryDiff).val[0];
 					if (totalDiff > thresholdProperties) {
 						//指定したフレーム以上変化がなかった場合は切り取り箇所とする。
 						if (frameCnt - tmpFrame > noChangeTime) {
@@ -135,13 +154,18 @@ public class movieCut_only {
 						}
 						tmpFrame = frameCnt;
 					}
+
 					roiFrame.release();
 					roiCurrentFrame.release();
 					diffFrame.release();
-					binaryDiff.release();
 				}
-				// 現在のフレームを次のフレームの前に保存
-				prevGrayFrame = frame.clone();
+
+				// 差分計算後に前のフレームを更新
+				Mat tempPrevGrayFrame = grayFrame.clone(); // クローンを一時変数に保存
+				if (prevGrayFrame != null) {
+					prevGrayFrame.release(); // 古いフレームを解放
+				}
+				prevGrayFrame = tempPrevGrayFrame; // 新しいフレームを prevGrayFrame に保存
 				frame.release();
 			} else {
 				vc.grab();

@@ -51,8 +51,7 @@ public class Option extends Application {
 
 		currentPath = Paths.get("").toAbsolutePath().toString();
 
-		String CSS_FILE = "\\src\\main\\resources\\style.css";
-		CSS_FILE = ("file:///" + currentPath + CSS_FILE).replace("\\", "/");
+		String CSS_FILE = ("file:///" + currentPath + "\\style.css").replace("\\", "/");
 
 		//動画番号と時間を取得してmapに追加。ファイル名一覧も取得
 		getNumberList();
@@ -419,7 +418,6 @@ public class Option extends Application {
 					int compareTime = convertToSeconds(dirStart);
 					int diff = startTimeInSeconds - compareTime;
 					diffMap.put(number, diff);
-					System.out.println(diff);
 				}
 
 				// 日付が一番近く かつ 若い番号のデータを見つける
@@ -449,8 +447,6 @@ public class Option extends Application {
 					String command = String.format(
 							"ffmpeg -noaccurate_seek -ss %s -i \"%s\" -t %s -c copy \"%s\"",
 							startTime, inputFile, duration, outputFile);
-
-					System.out.println(command);
 
 					try {
 						Process process = Runtime.getRuntime().exec(command);
