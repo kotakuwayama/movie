@@ -108,12 +108,16 @@ public class movieCut_only {
 				vc.grab();
 				vc.retrieve(frame);
 
+				// 空フレームをスキップ
+				if (frame.empty()) {
+					continue;
+				}
 				// フレームをグレースケールに変換
 				Mat grayFrame = new Mat();
 				Imgproc.cvtColor(frame, grayFrame, Imgproc.COLOR_BGR2GRAY);
 
 				// 差分計算前にノイズを低減するための平滑化処理
-				Imgproc.GaussianBlur(grayFrame, grayFrame, new Size(0, 0), 0);
+				Imgproc.GaussianBlur(grayFrame, grayFrame, new Size(5, 5), 0);
 
 				if (prevGrayFrame != null) {
 					// 読み取る領域
@@ -130,7 +134,7 @@ public class movieCut_only {
 					for (int y = 0; y < diffFrame.rows(); y++) {
 						for (int x = 0; x < diffFrame.cols(); x++) {
 							double[] diffPixelValue = diffFrame.get(y, x);
-							System.out.print(diffPixelValue[0] + "	");
+							//							System.out.print(diffPixelValue[0] + "	");
 							if (diffPixelValue[0] > pixelThreshold) {
 								totalDiff += diffPixelValue[0];
 								//								System.out.println(diffPixelValue[0]);
@@ -139,9 +143,9 @@ public class movieCut_only {
 							//								System.out.println(diffPixelValue[0]);
 							//							}
 						}
-						System.out.println();
+						//						System.out.println();
 					}
-					System.out.println(frameCnt / (int) frameRate + "秒   " + totalDiff);
+					//					System.out.println(frameCnt / (int) frameRate + "秒   " + totalDiff);
 
 					if (totalDiff > thresholdProperties) {
 						//指定したフレーム以上変化がなかった場合は切り取り箇所とする。
@@ -199,8 +203,8 @@ public class movieCut_only {
 			List<Integer> currentData = iterator.next();
 			if (previousData != null) {
 				double diff = currentData.get(0) - previousData.get(1);
-				if (diff < totalBlankTime) {
-					// 差分が開始終了余白の合計より小さい場合、要素を修正
+				if (diff <= totalBlankTime) {
+					// 差分が開始終了余白の合計以下の場合、要素を修正
 					previousData.set(1, currentData.get(1));
 					// 修正された要素を削除
 					iterator.remove();
